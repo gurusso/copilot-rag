@@ -5,13 +5,14 @@ from google import genai
 from pypdf import PdfReader
 from dotenv import load_dotenv
 
-# Carrega o .env obrigatoriamente no início
+# 1. Carrega as variáveis de ambiente no início
 load_dotenv()
 
-# Configuração do banco vetorial e cliente Gemini
+# 2. Inicialização dos clientes
 chroma_client = chromadb.PersistentClient(path="./data/chroma")
 collection = chroma_client.get_or_create_collection(name="documentos")
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
 
 def process_pdf(file_bytes: bytes, filename: str) -> int:
     """Extrai texto do PDF, divide em blocos e salva no ChromaDB com Embeddings."""
@@ -39,10 +40,10 @@ def process_pdf(file_bytes: bytes, filename: str) -> int:
     documents, ids, embeddings = [], [], []
     for idx, chunk in enumerate(text_chunks):
         response = gemini_client.models.embed_content(
-            model="text-embedding-004",
+            model="models/gemini-embedding-001",
             contents=chunk,
         )
-        embedding_values = response.embedding.values
+        embedding_values = response.embeddings[0].values
         
         documents.append(chunk)
         ids.append(f"{filename}_chunk_{idx}")
@@ -57,15 +58,17 @@ def process_pdf(file_bytes: bytes, filename: str) -> int:
         
     return len(documents)
 
+
 def ask_copilot(question: str) -> dict:
     """Gera embedding da pergunta, busca no banco vetorial e gera a resposta."""
     q_response = gemini_client.models.embed_content(
-        model="text-embedding-004",
+        model="models/gemini-embedding-001",
         contents=question,
     )
+    q_embedding_values = q_response.embeddings[0].values
     
     results = collection.query(
-        query_embeddings=[q_response.embedding.values],
+        query_embeddings=[q_embedding_values],
         n_results=3
     )
     
@@ -85,7 +88,7 @@ def ask_copilot(question: str) -> dict:
     """
 
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="models/gemini-2.5-flash",
         contents=prompt
     )
 
